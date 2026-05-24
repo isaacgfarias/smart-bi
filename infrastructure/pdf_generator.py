@@ -343,9 +343,11 @@ class PDFGenerator:
         return [img]
 
     def _build_table(self, tdata: dict, doc, page_size, margin, font_reg="Helvetica", font_bold="Helvetica-Bold") -> list:
-        from reportlab.platypus import Table, TableStyle, Spacer
+        from reportlab.platypus import Table, TableStyle, Spacer, Paragraph
+        from reportlab.lib.styles import ParagraphStyle
         from reportlab.lib import colors
         from reportlab.lib.units import mm
+        from reportlab.lib.enums import TA_LEFT
 
         cols = tdata.get("columns", [])
         rows = tdata.get("data", [])
@@ -353,28 +355,44 @@ class PDFGenerator:
             return []
 
         usable_width = page_size[0] - 2 * margin
-        col_w = usable_width / max(len(cols), 1)
+        n_cols = max(len(cols), 1)
+        col_w = usable_width / n_cols
 
-        header = [str(c) for c in cols]
-        body = [[str(r.get(c, ""))[:30] for c in cols] for r in rows[:60]]
+        # Estima o máximo de caracteres visíveis por célula baseado na largura
+        # (fonte 8pt ≈ 4.5pt por caractere em Helvetica)
+        max_chars = max(20, int(col_w / 4.5))
+
+        def _clip(text: str, limit: int = max_chars) -> str:
+            s = str(text or "")
+            return (s[:limit] + "…") if len(s) > limit else s
+
+        style_th = ParagraphStyle(
+            "TH", fontName=font_bold, fontSize=9,
+            textColor=colors.white, leading=13, alignment=TA_LEFT,
+        )
+        style_td = ParagraphStyle(
+            "TD", fontName=font_reg, fontSize=8,
+            textColor=colors.HexColor("#334155"), leading=11, alignment=TA_LEFT,
+        )
+
+        # Paragraph habilita word-wrap automático dentro da largura da coluna
+        header = [Paragraph(self._t(_clip(str(c), 40)), style_th) for c in cols]
+        body = [
+            [Paragraph(self._t(_clip(str(r.get(c, "")))), style_td) for c in cols]
+            for r in rows[:60]
+        ]
         table_data = [header] + body
 
-        t = Table(table_data, colWidths=[col_w] * len(cols), repeatRows=1)
+        t = Table(table_data, colWidths=[col_w] * n_cols, repeatRows=1)
         t.setStyle(TableStyle([
             ("BACKGROUND",    (0, 0), (-1, 0),  colors.HexColor("#1E293B")),
-            ("TEXTCOLOR",     (0, 0), (-1, 0),  colors.white),
-            ("FONTNAME",      (0, 0), (-1, 0),  font_bold),
-            ("FONTSIZE",      (0, 0), (-1, 0),  9),
-            ("BOTTOMPADDING", (0, 0), (-1, 0),  8),
-            ("TOPPADDING",    (0, 0), (-1, 0),  8),
             ("ROWBACKGROUNDS",(0, 1), (-1, -1), [colors.white, colors.HexColor("#F8FAFC")]),
-            ("TEXTCOLOR",     (0, 1), (-1, -1), colors.HexColor("#334155")),
-            ("FONTNAME",      (0, 1), (-1, -1), font_reg),
-            ("FONTSIZE",      (0, 1), (-1, -1), 8),
-            ("BOTTOMPADDING", (0, 1), (-1, -1), 6),
-            ("TOPPADDING",    (0, 1), (-1, -1), 6),
             ("GRID",          (0, 0), (-1, -1), 0.5, colors.HexColor("#E2E8F0")),
-            ("VALIGN",        (0, 0), (-1, -1), "MIDDLE"),
+            ("VALIGN",        (0, 0), (-1, -1), "TOP"),
+            ("LEFTPADDING",   (0, 0), (-1, -1), 5),
+            ("RIGHTPADDING",  (0, 0), (-1, -1), 5),
+            ("TOPPADDING",    (0, 0), (-1, -1), 6),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
         ]))
         return [t, Spacer(1, 3 * mm)]
 
