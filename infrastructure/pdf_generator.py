@@ -29,13 +29,26 @@ class PDFGenerator:
         from reportlab.pdfbase import pdfmetrics
         from reportlab.pdfbase.ttfonts import TTFont
 
-        candidates = [
+        # matplotlib é garantido no requirements.txt e já inclui DejaVu Sans
+        candidates = []
+        try:
+            import matplotlib as _mpl
+            _mpl_ttf = os.path.join(
+                os.path.dirname(_mpl.__file__), "mpl-data", "fonts", "ttf"
+            )
+            candidates += [
+                (os.path.join(_mpl_ttf, "DejaVuSans.ttf"),
+                 os.path.join(_mpl_ttf, "DejaVuSans-Bold.ttf")),
+            ]
+        except Exception:
+            pass
+        candidates += [
             # DejaVu — presente na maioria dos containers Linux
             ("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
              "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"),
             ("/usr/share/fonts/dejavu/DejaVuSans.ttf",
              "/usr/share/fonts/dejavu/DejaVuSans-Bold.ttf"),
-            # Liberation Sans (similar ao Arial)
+            # Liberation Sans
             ("/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
              "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf"),
             ("/usr/share/fonts/liberation/LiberationSans-Regular.ttf",
@@ -43,17 +56,14 @@ class PDFGenerator:
             # Ubuntu Font
             ("/usr/share/fonts/truetype/ubuntu/Ubuntu-R.ttf",
              "/usr/share/fonts/truetype/ubuntu/Ubuntu-B.ttf"),
-            # Noto Sans (muito completo)
+            # Noto Sans
             ("/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf",
              "/usr/share/fonts/truetype/noto/NotoSans-Bold.ttf"),
-            ("/usr/share/fonts/noto/NotoSans-Regular.ttf",
-             "/usr/share/fonts/noto/NotoSans-Bold.ttf"),
             # Windows
             ("C:/Windows/Fonts/arial.ttf",   "C:/Windows/Fonts/arialbd.ttf"),
             ("C:/Windows/Fonts/Arial.ttf",   "C:/Windows/Fonts/ArialBd.ttf"),
             # macOS
             ("/Library/Fonts/Arial.ttf",     "/Library/Fonts/Arial Bold.ttf"),
-            ("/System/Library/Fonts/Supplemental/Arial.ttf", None),
         ]
 
         for reg_path, bold_path in candidates:

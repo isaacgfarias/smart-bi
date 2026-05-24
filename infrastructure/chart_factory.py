@@ -143,19 +143,31 @@ class ChartFactory:
 
         def _load_ttf(size: int):
             """Carrega TTF com suporte a acentos; fallback para bitmap."""
-            _candidates = [
+            import os as _os
+            # matplotlib é garantido no requirements.txt e inclui DejaVu
+            _candidates = []
+            try:
+                import matplotlib as _mpl
+                _mpl_ttf = _os.path.join(
+                    _os.path.dirname(_mpl.__file__), "mpl-data", "fonts", "ttf"
+                )
+                _candidates += [
+                    _os.path.join(_mpl_ttf, "DejaVuSans.ttf"),
+                    _os.path.join(_mpl_ttf, "DejaVuSans-Oblique.ttf"),
+                ]
+            except Exception:
+                pass
+            _candidates += [
                 "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
                 "/usr/share/fonts/dejavu/DejaVuSans.ttf",
                 "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
                 "/usr/share/fonts/liberation/LiberationSans-Regular.ttf",
                 "/usr/share/fonts/truetype/ubuntu/Ubuntu-R.ttf",
                 "/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf",
-                "/usr/share/fonts/noto/NotoSans-Regular.ttf",
                 "C:/Windows/Fonts/arial.ttf",
                 "C:/Windows/Fonts/Arial.ttf",
                 "/Library/Fonts/Arial.ttf",
             ]
-            import os as _os
             for path in _candidates:
                 if _os.path.exists(path):
                     try:
