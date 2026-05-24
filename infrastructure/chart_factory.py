@@ -141,12 +141,35 @@ class ChartFactory:
         img = Image.new("RGBA", (W, H), (255, 255, 255, 255))
         draw = ImageDraw.Draw(img, "RGBA")
 
-        try:
-            font_sm = ImageFont.load_default(size=12)
-            font_md = ImageFont.load_default(size=14)
-            font_bold = ImageFont.load_default(size=16)
-        except Exception:
-            font_sm = font_md = font_bold = ImageFont.load_default()
+        def _load_ttf(size: int):
+            """Carrega TTF com suporte a acentos; fallback para bitmap."""
+            _candidates = [
+                "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+                "/usr/share/fonts/dejavu/DejaVuSans.ttf",
+                "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+                "/usr/share/fonts/liberation/LiberationSans-Regular.ttf",
+                "/usr/share/fonts/truetype/ubuntu/Ubuntu-R.ttf",
+                "/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf",
+                "/usr/share/fonts/noto/NotoSans-Regular.ttf",
+                "C:/Windows/Fonts/arial.ttf",
+                "C:/Windows/Fonts/Arial.ttf",
+                "/Library/Fonts/Arial.ttf",
+            ]
+            import os as _os
+            for path in _candidates:
+                if _os.path.exists(path):
+                    try:
+                        return ImageFont.truetype(path, size)
+                    except Exception:
+                        continue
+            try:
+                return ImageFont.load_default(size=size)
+            except Exception:
+                return ImageFont.load_default()
+
+        font_sm   = _load_ttf(12)
+        font_md   = _load_ttf(14)
+        font_bold = _load_ttf(16)
 
         cx0 = ML          # chart area left
         cy0 = MT          # chart area top
