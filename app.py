@@ -907,6 +907,9 @@ class DashboardBuilderApp:
         if not viz_type or not current_analysis or not current_analysis.data_schema:
             return
 
+        # Limpa o trigger ANTES de abrir o dialog — assim o X fecha sem reabrir
+        set_state("configuring_new_viz", None)
+
         # MEASURES → abre o dialog dedicado (não cria card no slide)
         if viz_type == VisualizationType.MEASURES:
             from presentation.widgets import render_measures_dialog
@@ -918,11 +921,9 @@ class DashboardBuilderApp:
 
             def on_save_measures(updated: list):
                 self._on_update_measures(updated)
-                set_state("configuring_new_viz", None)
                 st.rerun()
 
             def on_cancel_measures():
-                set_state("configuring_new_viz", None)
                 st.rerun()
 
             render_measures_dialog(
@@ -937,11 +938,9 @@ class DashboardBuilderApp:
 
         def on_save(config):
             self._create_visualization_with_config(viz_type, config)
-            set_state("configuring_new_viz", None)
             st.rerun()
 
         def on_cancel():
-            set_state("configuring_new_viz", None)
             st.rerun()
 
         render_visualization_config_dialog(
@@ -976,21 +975,21 @@ class DashboardBuilderApp:
             set_state("editing_slide_id", None)
             return
 
+        # Limpa o trigger ANTES de abrir o dialog — assim o X fecha sem reabrir
+        set_state("editing_viz_id", None)
+        set_state("editing_slide_id", None)
+
         from presentation.widgets import render_visualization_config_dialog
 
         def on_save(new_config):
             self.analysis_service.update_visualization(
                 slide_id, viz_id, config=new_config
             )
-            set_state("editing_viz_id", None)
-            set_state("editing_slide_id", None)
             self.analysis_service.save_current_analysis()
             st.toast("✓ Visualização atualizada!")
             st.rerun()
 
         def on_cancel():
-            set_state("editing_viz_id", None)
-            set_state("editing_slide_id", None)
             st.rerun()
 
         render_visualization_config_dialog(
