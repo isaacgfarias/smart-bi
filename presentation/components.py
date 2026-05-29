@@ -230,7 +230,7 @@ def render_welcome_screen(on_new_analysis: Callable) -> None:
 
     # Feature cards
     features = [
-        ("📊", "12 tipos de gráfico", "Colunas, Barras, Linhas, Pizza, Área, Dispersão, Histograma, Box, Heatmap e mais"),
+        ("📊", "10 tipos de gráfico", "Colunas, Barras, Linhas, Pizza, Área, Dispersão, Histograma, Box, Heatmap e mais"),
         ("🔍", "Filtros por visual", "Filtre cada gráfico de forma independente sem afetar os demais"),
         ("📐", "Medidas calculadas", "Crie KPIs customizados como Ticket Médio, Margem % e Crescimento"),
         ("📤", "Exportação em PDF", "Gere relatórios prontos para apresentação com um clique"),
