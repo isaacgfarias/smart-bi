@@ -157,21 +157,23 @@ def render_viz_filters(viz_id: str, df: pl.DataFrame) -> pl.DataFrame:
 
             with c3:
                 needs_val = op_sel not in ("is_null", "is_not_null")
+                # Key includes col+op so widget type changes don't collide in session state
+                val_key = f"f_val_{viz_id}_{i}_{col_sel}_{op_sel}"
                 if needs_val:
                     if op_sel == "in":
                         val_input = st.text_input(
-                            "val", value=str(f["val"]) if f["val"] != "" else "",
+                            "val", value=str(f["val"]) if isinstance(f["val"], str) else "",
                             placeholder="val1, val2, val3",
-                            key=f"f_val_{viz_id}_{i}", label_visibility="collapsed",
+                            key=val_key, label_visibility="collapsed",
                         )
                     elif is_numeric:
                         try:
-                            cur_num = float(f["val"]) if f["val"] != "" else 0.0
+                            cur_num = float(f["val"]) if not isinstance(f["val"], (list, str)) or (isinstance(f["val"], str) and f["val"] != "") else 0.0
                         except (ValueError, TypeError):
                             cur_num = 0.0
                         val_input = st.number_input(
                             "val", value=cur_num,
-                            key=f"f_val_{viz_id}_{i}", label_visibility="collapsed",
+                            key=val_key, label_visibility="collapsed",
                         )
                     else:
                         # Categorical: multiselect com valores únicos da coluna
@@ -179,7 +181,7 @@ def render_viz_filters(viz_id: str, df: pl.DataFrame) -> pl.DataFrame:
                         cur_sel = f["val"] if isinstance(f["val"], list) else []
                         val_input = st.multiselect(
                             "val", unique_vals, default=[v for v in cur_sel if v in unique_vals],
-                            key=f"f_val_{viz_id}_{i}", label_visibility="collapsed",
+                            key=val_key, label_visibility="collapsed",
                         )
                     filters[i]["val"] = val_input
                 else:
