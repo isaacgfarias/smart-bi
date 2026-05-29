@@ -83,20 +83,81 @@ def render_canvas(
             )
 
 
+_INT_TYPES = (pl.Int8, pl.Int16, pl.Int32, pl.Int64, pl.UInt8, pl.UInt16, pl.UInt32, pl.UInt64)
+_FLOAT_TYPES = (pl.Float32, pl.Float64)
+_NUMERIC_TYPES = _INT_TYPES + _FLOAT_TYPES
+
+
 def _cast_filter_val(df: pl.DataFrame, col: str, val):
     """Converte o valor do filtro para o dtype da coluna."""
     dtype = df.schema.get(col)
-    if dtype in (pl.Float64, pl.Float32):
+    if dtype in _FLOAT_TYPES:
         try:
             return float(val)
         except (ValueError, TypeError):
             return val
-    if dtype in (pl.Int64, pl.Int32, pl.Int16, pl.Int8, pl.UInt64, pl.UInt32):
+    if dtype in _INT_TYPES:
         try:
             return int(float(val))
         except (ValueError, TypeError):
             return val
+    # Decimal and other numeric-like types: cast to float
+    try:
+        if hasattr(dtype, "is_numeric") and dtype.is_numeric():
+            return float(val)
+    except Exception:
+        pass
     return val
+
+
+def _apply_filter_list(df: pl.DataFrame, filter_list: list, show_warnings: bool = False) -> pl.DataFrame:
+    """Aplica uma lista de filtros ao df e retorna o resultado."""
+    result = df
+    for f in filter_list:
+        col, op, val = f.get("col"), f.get("op"), f.get("val")
+        if not col or col not in result.columns:
+            continue
+        if op not in ("is_null", "is_not_null"):
+            if isinstance(val, list) and len(val) == 0:
+                continue
+            if isinstance(val, str) and val.strip() == "":
+                continue
+        try:
+            c = pl.col(col)
+            if op == "is_null":
+                result = result.filter(c.is_null())
+            elif op == "is_not_null":
+                result = result.filter(c.is_not_null())
+            elif op == "in":
+                vals = [v.strip() for v in str(val).split(",") if v.strip()]
+                if vals:
+                    result = result.filter(c.cast(pl.String).is_in(vals))
+            elif op == "contains":
+                result = result.filter(c.cast(pl.String).str.contains(str(val), literal=True))
+            elif op == "starts_with":
+                result = result.filter(c.cast(pl.String).str.starts_with(str(val)))
+            elif op == "eq":
+                if isinstance(val, list):
+                    result = result.filter(c.cast(pl.String).is_in([str(v) for v in val]))
+                else:
+                    result = result.filter(c == _cast_filter_val(result, col, val))
+            elif op == "ne":
+                if isinstance(val, list):
+                    result = result.filter(c.cast(pl.String).is_in([str(v) for v in val]).not_())
+                else:
+                    result = result.filter(c != _cast_filter_val(result, col, val))
+            elif op == "gt":
+                result = result.filter(c > _cast_filter_val(result, col, val))
+            elif op == "lt":
+                result = result.filter(c < _cast_filter_val(result, col, val))
+            elif op == "gte":
+                result = result.filter(c >= _cast_filter_val(result, col, val))
+            elif op == "lte":
+                result = result.filter(c <= _cast_filter_val(result, col, val))
+        except Exception as e:
+            if show_warnings:
+                st.warning(f"Filtro inválido em '{col}': {e}")
+    return result
 
 
 def render_viz_filters(viz_id: str, df: pl.DataFrame) -> pl.DataFrame:
@@ -110,7 +171,16 @@ def render_viz_filters(viz_id: str, df: pl.DataFrame) -> pl.DataFrame:
 
     filters: list = st.session_state[key]
     n = len(filters)
-    label = f"🔍 Filtros ({n} ativo{'s' if n != 1 else ''})" if n else "🔍 Filtros"
+
+    # Preview count from previous render's filter state (before widgets update values)
+    if n:
+        preview_df = _apply_filter_list(df, filters)
+        label = (
+            f"🔍 Filtros ({n} ativo{'s' if n != 1 else ''})"
+            f" · {len(preview_df):,} linha{'s' if len(preview_df) != 1 else ''}"
+        )
+    else:
+        label = "🔍 Filtros"
 
     with st.expander(label, expanded=n > 0):
         if st.button("➕ Adicionar filtro", key=f"add_f_{viz_id}"):
@@ -130,9 +200,8 @@ def render_viz_filters(viz_id: str, df: pl.DataFrame) -> pl.DataFrame:
                 filters[i]["col"] = col_sel
 
             dtype = df.schema.get(col_sel)
-            is_numeric = dtype in (
-                pl.Float64, pl.Float32, pl.Int64, pl.Int32,
-                pl.Int16, pl.Int8, pl.UInt64, pl.UInt32,
+            is_numeric = dtype in _NUMERIC_TYPES or (
+                hasattr(dtype, "is_numeric") and dtype.is_numeric()
             )
             is_date = dtype in (pl.Date, pl.Datetime)
 
@@ -198,54 +267,7 @@ def render_viz_filters(viz_id: str, df: pl.DataFrame) -> pl.DataFrame:
             ]
             st.rerun()
 
-    # ── Aplicar filtros ao df ────────────────────────────────────────────────
-    result = df
-    for f in st.session_state.get(key, []):
-        col, op, val = f["col"], f["op"], f["val"]
-        if col not in result.columns:
-            continue
-        # Skip filters without a meaningful value
-        if op not in ("is_null", "is_not_null"):
-            if isinstance(val, list) and len(val) == 0:
-                continue
-            if isinstance(val, str) and val.strip() == "":
-                continue
-        try:
-            c = pl.col(col)
-            if op == "is_null":
-                result = result.filter(c.is_null())
-            elif op == "is_not_null":
-                result = result.filter(c.is_not_null())
-            elif op == "in":
-                vals = [v.strip() for v in str(val).split(",") if v.strip()]
-                if vals:
-                    result = result.filter(c.cast(pl.String).is_in(vals))
-            elif op == "contains":
-                result = result.filter(c.cast(pl.String).str.contains(str(val), literal=True))
-            elif op == "starts_with":
-                result = result.filter(c.cast(pl.String).str.starts_with(str(val)))
-            elif op == "eq":
-                if isinstance(val, list):
-                    result = result.filter(c.cast(pl.String).is_in([str(v) for v in val]))
-                else:
-                    result = result.filter(c == _cast_filter_val(result, col, val))
-            elif op == "ne":
-                if isinstance(val, list):
-                    result = result.filter(c.cast(pl.String).is_in([str(v) for v in val]).not_())
-                else:
-                    result = result.filter(c != _cast_filter_val(result, col, val))
-            elif op == "gt":
-                result = result.filter(c > _cast_filter_val(result, col, val))
-            elif op == "lt":
-                result = result.filter(c < _cast_filter_val(result, col, val))
-            elif op == "gte":
-                result = result.filter(c >= _cast_filter_val(result, col, val))
-            elif op == "lte":
-                result = result.filter(c <= _cast_filter_val(result, col, val))
-        except Exception as e:
-            st.warning(f"Filtro inválido em '{col}': {e}")
-
-    return result
+    return _apply_filter_list(df, st.session_state.get(key, []), show_warnings=True)
 
 
 _SORT_OPTS: dict = {
@@ -546,18 +568,21 @@ def render_visualization(
         )
 
         # Gráfico / tabela
-        try:
-            if viz.config.visualization_type == VisualizationType.TABLE:
-                render_table(viz, df_filtered)
-            elif viz.config.visualization_type == VisualizationType.METRIC_CARD:
-                render_metric_card(viz, df_filtered)
-            else:
-                fig = chart_factory.create_chart(
-                    df_filtered, viz.config, sort_by=sort_by
-                )
-                st.plotly_chart(fig, width='stretch', key=f"chart_{viz.id}")
-        except Exception as e:
-            st.error(f"Erro ao renderizar: {e}")
+        if df_filtered.is_empty():
+            st.info("Nenhuma linha corresponde aos filtros ativos.")
+        else:
+            try:
+                if viz.config.visualization_type == VisualizationType.TABLE:
+                    render_table(viz, df_filtered)
+                elif viz.config.visualization_type == VisualizationType.METRIC_CARD:
+                    render_metric_card(viz, df_filtered)
+                else:
+                    fig = chart_factory.create_chart(
+                        df_filtered, viz.config, sort_by=sort_by
+                    )
+                    st.plotly_chart(fig, width='stretch', key=f"chart_{viz.id}")
+            except Exception as e:
+                st.error(f"Erro ao renderizar: {e}")
 
         # Comentário
         if viz.comment:
