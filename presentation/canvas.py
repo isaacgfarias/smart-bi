@@ -202,6 +202,12 @@ def render_viz_filters(viz_id: str, df: pl.DataFrame) -> pl.DataFrame:
         col, op, val = f["col"], f["op"], f["val"]
         if col not in result.columns:
             continue
+        # Skip filters without a meaningful value
+        if op not in ("is_null", "is_not_null"):
+            if isinstance(val, list) and len(val) == 0:
+                continue
+            if isinstance(val, str) and val.strip() == "":
+                continue
         try:
             c = pl.col(col)
             if op == "is_null":
@@ -210,7 +216,8 @@ def render_viz_filters(viz_id: str, df: pl.DataFrame) -> pl.DataFrame:
                 result = result.filter(c.is_not_null())
             elif op == "in":
                 vals = [v.strip() for v in str(val).split(",") if v.strip()]
-                result = result.filter(c.cast(pl.String).is_in(vals))
+                if vals:
+                    result = result.filter(c.cast(pl.String).is_in(vals))
             elif op == "contains":
                 result = result.filter(c.cast(pl.String).str.contains(str(val), literal=True))
             elif op == "starts_with":
@@ -221,7 +228,10 @@ def render_viz_filters(viz_id: str, df: pl.DataFrame) -> pl.DataFrame:
                 else:
                     result = result.filter(c == _cast_filter_val(result, col, val))
             elif op == "ne":
-                result = result.filter(c != _cast_filter_val(result, col, val))
+                if isinstance(val, list):
+                    result = result.filter(c.cast(pl.String).is_in([str(v) for v in val]).not_())
+                else:
+                    result = result.filter(c != _cast_filter_val(result, col, val))
             elif op == "gt":
                 result = result.filter(c > _cast_filter_val(result, col, val))
             elif op == "lt":
@@ -230,8 +240,8 @@ def render_viz_filters(viz_id: str, df: pl.DataFrame) -> pl.DataFrame:
                 result = result.filter(c >= _cast_filter_val(result, col, val))
             elif op == "lte":
                 result = result.filter(c <= _cast_filter_val(result, col, val))
-        except Exception:
-            pass  # filtro inválido é ignorado silenciosamente
+        except Exception as e:
+            st.warning(f"Filtro inválido em '{col}': {e}")
 
     return result
 
